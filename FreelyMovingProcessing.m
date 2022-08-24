@@ -6,9 +6,6 @@
 %% ===== Read Data File and Adjustments  ===== %%
 clear; %%Refresh Everything
 
-framerate = 30;
-confidenceThreshold = 0.9;
-
 %Import tracking data
 [file, path] = uigetfile( '*.csv','Select Tracking Data: ', 'D:\');
 opts = detectImportOptions(strcat(path,file));
@@ -38,12 +35,81 @@ video = VideoReader(strcat(path,file));
 framerate = video.framerate;
 timePerFrame = 1/framerate;
 totalFrames = length(PoseData.index);
-
-
+state = -1;
 %% ======= Initial Settings ==== %%
 initialSettings = inputApp;
 initialSettings.Settings.Visible = 1;
 uiwait(initialSettings.UIFigure);
+
+%% ======= ROI Determination ==== %%
+odorLROI = zeros(4,2); 
+odorRROI = zeros(4,2);
+
+L_Port1 = zeros(1,2);
+L_Port3 = zeros(1,2);
+R_Port1 = zeros(1,2);
+R_Port3 = zeros(1,2);
+       
+%%Input ROI if needed
+if inputROI == 1
+        state = 1;
+        inputGUI = inputApp;
+        inputGUI.ROI.Visible = 1;
+        inputGUI.Settings.Visible = 0;
+        uiwait(inputGUI.UIFigure);
+end
+
+initFrame = readFrame(video);
+%%Draw ROIs
+while state ~= 1
+    display = imshow(initFrame);
+    
+%     msg = msgbox('Please label the three ports for the RIGHT bank', 'Bank 1', 'modal');
+%     uiwait(msg);
+%     B1P1 = drawpoint('Color', 'Cyan');
+%     B1P2 = drawpoint('Color', 'Green');
+%     B1P3 = drawpoint('Color', 'Red');
+%     
+%     msg = msgbox('Please label the three ports for the LEFT bank', 'Bank 2','modal');
+%     uiwait(msg);
+%     B2P1 = drawpoint('Color', 'Cyan');
+%     B2P2 = drawpoint('Color', 'Green');
+%     B3P3 = drawpoint('Color', 'Red');
+    
+    msg = msgbox('Please outline the ROI for ODOR on the Right', 'Odor','modal');
+    uiwait(msg);
+    odorRight = drawrectangle('LineWidth', 7, 'Color', 'Yellow');
+    
+    msg = msgbox('Please outline the ROI for ODOR on the Left', 'Odor','modal');
+    uiwait(msg);
+    odorLeft = drawrectangle('LineWidth', 7, 'Color', 'Magenta');
+    
+    confirmation = questdlg('Would you like to redraw the ROIs?' ,'Finished?', 'No, Process Video', 'Yes', 'No, Process Video');
+
+    switch confirmation
+        case 'No, Process Video'
+            state = 1;  
+%             bank1Locs(1,:) = B1P1.Position;
+%             bank1Locs(2,:) = B1P2.Position;
+%             bank1Locs(3,:) = B1P3.Position;
+%             bank2Locs(1,:) = B2P1.Position;
+%             bank2Locs(2,:) = B2P2.Position;
+%             bank2Locs(3,:) = B2P2.Position;
+
+            odorLROI = odorLeft.Vertices;
+            odorRROI = odorRight.Vertices;
+            
+%             L_Port1 = bank1Locs(1,:);
+%             L_Port3 = bank1Locs(3,:);
+%             R_Port1 = bank2Locs(1,:);
+%             R_Port3 = bank2Locs(3,:);
+            
+            close(display.Parent.Parent);
+        case 'Yes, Restart'
+            state = 0;
+            close(display.Parent.Parent);
+    end
+end
 
 %% ======= X/Y Coordinates ===== %%
 noseCoords = [PoseData.noseX, PoseData.noseY];
@@ -166,7 +232,6 @@ averageNoseSpeed = mean(noseSpeed(:,1)); %% PX/Second
 averageBodySpeed = mean(bodySpeed(:,1)); %% PX/Second
 
 for i = 1:length(trials.StartFrame)
-
     trials.averageTrialNoseSpeed(i) = mean(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
     trials.maxTrialNoseSpeed(i) = max(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
     trials.minTrialNoseSpeed(i) = min(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
