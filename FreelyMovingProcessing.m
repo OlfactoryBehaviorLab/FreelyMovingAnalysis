@@ -31,9 +31,14 @@ for i = 1: length(Odors)
     Odors{i} = [ImportOdors(i,find(~isspace(ImportOdors(i,:))))];
 end
 
-%[file, path] = uigetfile('*.mp4', 'Select Eperiment Video:', 'D:\');
+[file, path] = uigetfile('*.mp4', 'Select Eperiment Video:', 'D:\');
 
+video = VideoReader(strcat(path,file));
+
+framerate = video.framerate;
+timePerFrame = 1/framerate;
 totalFrames = length(PoseData.index);
+
 
 %% ======= Initial Settings ==== %%
 initialSettings = inputApp;
@@ -113,8 +118,8 @@ for i = (trials.StartFrame(1)+1):length(ledState)        %% Start one frame afte
     end
 end
 
-%numTrials = length(ExperimentData.trialNumber);   
-numTrials = length(trials);
+%numTrials = length(ExperimentData.trialNumber);   %%This is the real way to do it just does not work with the test data
+numTrials = length(trials.StartFrame);
 
 for j = 1:numTrials
     trials.TrialType(j) = ledState(trials.StartFrame(j),2);      %% Set whether a specific trial is an L (0) or R (1) trial in col 3   
@@ -137,34 +142,38 @@ for index = 1:totalFrames-1
        pair1 = [bodyCoords(index,1) bodyCoords(index,2)];       %% Get the first ordered pair
        pair2 = [bodyCoords(index+1,1) bodyCoords(index+1,2)];   %% Get the next ordered pair in line
        coordinate = [pair1; pair2];                             %% Vertically concatenate the two pairs into a 2x2 matrix
-       bodyDistance(index) = pdist(coordinate);                 %% Get the euclidean distance between the two points
-  
+       bodyDistance(index) = pdist(coordinate);                 %% Get the euclidean distance between the two points 
 end
 
 
 totalDistance_nose = sum(noseDistance); %% Total distance the nose traveled 
 totalDistance_body = sum(bodyDistance); %% Total distance the body traveled
 
-%% ======= Total Distance Per Trial ======= %%
+%% ======= Per Trial Distance  ======= %%
 
 for i = 1:length(trials.StartFrame)
-   tempArray = [];
-   for j = trials.StartFrame(i):(trials.EndFrame(i)-1)
-       pair1 = [noseCoords(j,1) noseCoords(j,2)];       %% Get the first ordered pair
-       pair2 = [noseCoords(j+1,1) noseCoords(j+1,2)];   %% Get the next ordered pair in line
-       coordinate = [pair1; pair2];                             %% Vertically concatenate the two pairs into a 2x2 matrix
-       tempArray(j) = pdist(coordinate);
-   end
-       trials.trialNoseDistance(i) = sum(tempArray);
-   for k = trials.StartFrame(i):(trials.EndFrame(i)-1)
-       pair1 = [bodyCoords(k,1) bodyCoords(k,2)];       %% Get the first ordered pair
-       pair2 = [bodyCoords(k+1,1) bodyCoords(k+1,2)];   %% Get the next ordered pair in line
-       coordinate = [pair1; pair2];                             %% Vertically concatenate the two pairs into a 2x2 matrix
-       bodyDistance(k) = pdist(coordinate);                 %% Get the euclidean distance between the two points
-   end
-    trials.trialBodyDistance(i) = sum(tempArray);
+
+    trials.trialNoseDistance(i) = sum(noseDistance(trials.StartFrame(i):trials.EndFrame(i))); %% Total Nose Distance per trial
+    trials.trialBodyDistance(i) = sum(bodyDistance(trials.StartFrame(i):trials.EndFrame(i))); %% Total Body Distance per trial
+    
 end
 
-%% ======= Velocities (Gotta go fast boi) ==== % 
+%% ======= Speeds (Gotta go fast boi) ==== %%
+noseSpeed(:,1) = noseDistance/timePerFrame;
+bodySpeed(:,1) = bodyDistance/timePerFrame;
+
+averageNoseSpeed = mean(noseSpeed(:,1)); %% PX/Second
+averageBodySpeed = mean(bodySpeed(:,1)); %% PX/Second
+
+for i = 1:length(trials.StartFrame)
+
+    trials.averageTrialNoseSpeed(i) = mean(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
+    trials.maxTrialNoseSpeed(i) = max(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
+    trials.minTrialNoseSpeed(i) = min(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
+    trials.averageTrialBodySpeed(i) = mean(bodySpeed(trials.StartFrame(i):trials.EndFrame(i)));
+    trials.maxTrialBodySpeed(i) = max(bodySpeed(trials.StartFrame(i):trials.EndFrame(i)));
+    trials.minTrialBodySpeed(i) = min(bodySpeed(trials.StartFrame(i):trials.EndFrame(i)));
+end
+
 
 
