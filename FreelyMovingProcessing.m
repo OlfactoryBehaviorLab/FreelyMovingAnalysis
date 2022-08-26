@@ -157,41 +157,41 @@ for i = 1:length(LEDCoords)
 end
 
 %% ======== Trial Stats ====== %%
-trials = table;
+trialStats = table;
 
-trials.StartFrame = find(ledState(:,1), 1, 'first'); %%Find the start of trial one
+trialStats.StartFrame = find(ledState(:,1), 1, 'first'); %%Find the start of trial one
 trialCounter = 1;                               %% Initialize to trial one
 firstFound = true;                              %% Start frame has been found
   
-for i = (trials.StartFrame(1)+1):length(ledState)        %% Start one frame after trial 1 start and iterate to end
+for i = (trialStats.StartFrame(1)+1):length(ledState)        %% Start one frame after trial 1 start and iterate to end
     if(firstFound)                              %% Search for the first instance of 0 (led OFF) after the start of a trial
         if(ledState(i,1) == 0)                  %% This will be the end of the respective trial
-            trials.EndFrame(trialCounter) = i;        %% Set end frame to current index
+            trialStats.EndFrame(trialCounter) = i;        %% Set end frame to current index
             trialCounter = trialCounter + 1;    %% Advance trial counter
             firstFound = false;                 %% Reset firstFound so we can search for the first index of the next trial
         end
     else
         if(ledState(i,1) == 1)                  %% If we have not found the first frame of the trial, look for it
             firstFound = true;
-            trials.StartFrame(trialCounter) = i;         %% Set first frame of this new trial to current index once found
+            trialStats.StartFrame(trialCounter) = i;         %% Set first frame of this new trial to current index once found
         end
     end
     
     if(i == length(ledState))                   %% Edge case for if the last frame is during a trial it will set the end frame to the last index
         if(firstFound)                          %% Typically not the case, but incase of a crash or video failure 
-            trials.EndFrame(trialCounter) = i;
+            trialStats.EndFrame(trialCounter) = i;
         end
     end
 end
 
 %numTrials = length(ExperimentData.trialNumber);   %%This is the real way to do it just does not work with the test data
-numTrials = length(trials.StartFrame);
+numTrials = length(trialStats.StartFrame);
 
 for j = 1:numTrials
-    trials.TrialType(j) = ledState(trials.StartFrame(j),2);      %% Set whether a specific trial is an L (0) or R (1) trial in col 3   
+    trialStats.TrialType(j) = ledState(trialStats.StartFrame(j),2);      %% Set whether a specific trial is an L (0) or R (1) trial in col 3   
 end
 
-trials.odor = Odors(1:length(trials.StartFrame));
+trialStats.odor = Odors(1:length(trialStats.StartFrame));
 
 %% ======= Total Distance Calculations===== %%
 noseDistance = zeros(totalFrames, 1);
@@ -217,10 +217,10 @@ totalDistance_body = sum(bodyDistance); %% Total distance the body traveled
 
 %% ======= Per Trial Distance  ======= %%
 
-for i = 1:length(trials.StartFrame)
+for i = 1:length(trialStats.StartFrame)
 
-    trials.trialNoseDistance(i) = sum(noseDistance(trials.StartFrame(i):trials.EndFrame(i))); %% Total Nose Distance per trial
-    trials.trialBodyDistance(i) = sum(bodyDistance(trials.StartFrame(i):trials.EndFrame(i))); %% Total Body Distance per trial
+    trialStats.trialNoseDistance(i) = sum(noseDistance(trialStats.StartFrame(i):trialStats.EndFrame(i))); %% Total Nose Distance per trial
+    trialStats.trialBodyDistance(i) = sum(bodyDistance(trialStats.StartFrame(i):trialStats.EndFrame(i))); %% Total Body Distance per trial
     
 end
 
@@ -231,14 +231,32 @@ bodySpeed(:,1) = bodyDistance/timePerFrame;
 averageNoseSpeed = mean(noseSpeed(:,1)); %% PX/Second
 averageBodySpeed = mean(bodySpeed(:,1)); %% PX/Second
 
-for i = 1:length(trials.StartFrame)
-    trials.averageTrialNoseSpeed(i) = mean(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
-    trials.maxTrialNoseSpeed(i) = max(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
-    trials.minTrialNoseSpeed(i) = min(noseSpeed(trials.StartFrame(i):trials.EndFrame(i)));
-    trials.averageTrialBodySpeed(i) = mean(bodySpeed(trials.StartFrame(i):trials.EndFrame(i)));
-    trials.maxTrialBodySpeed(i) = max(bodySpeed(trials.StartFrame(i):trials.EndFrame(i)));
-    trials.minTrialBodySpeed(i) = min(bodySpeed(trials.StartFrame(i):trials.EndFrame(i)));
+for i = 1:length(trialStats.StartFrame)
+    trialStats.averageTrialNoseSpeed(i) = mean(noseSpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
+    trialStats.maxTrialNoseSpeed(i) = max(noseSpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
+    trialStats.minTrialNoseSpeed(i) = min(noseSpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
+    trialStats.averageTrialBodySpeed(i) = mean(bodySpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
+    trialStats.maxTrialBodySpeed(i) = max(bodySpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
+    trialStats.minTrialBodySpeed(i) = min(bodySpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
 end
 
+%% ======= Time in ROI ======= %%
+for i = 1:numTrials
+    trialStats.LROI_Nose_Time(i) = 0;
+    trialStats.RROI_Nose_Time(i) = 0;
+    trialStats.LROI_Body_Time(i) = 0;
+    trialStats.RROI_Body_Time(i) = 0;
+    startFrame = trialStats.StartFrame(i);
+    endFrame = trialStats.EndFrame(i);
+    
+    [inL] = inpolygon(noseCoords(startFrame:endFrame,1),noseCoords(startFrame:endFrame,2),odorLROI(1,:),odorLROI(2,:));
+    trialStats.LROI_Nose_Time(i) = sum(inL)*timePerFrame;
+    [inR] =  inpolygon(noseCoords(startFrame:endFrame,1),noseCoords(startFrame:endFrame,2),odorRROI(1,:),odorRROI(2,:));
+    trialStats.RROI_Nose_Time(i) = sum(inR)*timePerFrame;
+    [inL] = inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorLROI(1,:),odorLROI(2,:));
+    trialStats.LROI_Body_Time(i) = sum(inL)*timePerFrame;
+    [inR] =  inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorRROI(1,:),odorRROI(2,:));
+    trialStats.RROI_Body_Time(i) = sum(inR)*timePerFrame;
 
+end
 
