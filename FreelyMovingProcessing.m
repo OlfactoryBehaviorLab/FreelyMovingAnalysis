@@ -144,51 +144,51 @@ badRearFrames = find(rearLike < confidenceThreshold);
 ledState = zeros(size(LEDCoords));
 for i = 1:length(LEDCoords)
     if(LEDLike(i) >= 0.98)
-        ledState(i,1) = 1; %% If led is on set the column 1 digit to 1
+        ledState(i,1) = 1;                                                  %% If led is on set the column 1 digit to 1
         if(LEDCoords(i,1) <= ledLeftX)
-            ledState(i,2) = 0; %% If led is on the left, set column 2 digit to 0
+            ledState(i,2) = 0;                                              %% If led is on the left, set column 2 digit to 0
         elseif(LEDCoords(i,1) >= ledRightX)
-            ledState(i,2) = 1; %% If led is on the right, set column 2 digit to 1
+            ledState(i,2) = 1;                                              %% If led is on the right, set column 2 digit to 1
         end
     else
-        ledState(i,1) = 0; %% if led is off set column 1 digit to 0
-        ledState(i,2) = -1; %% Since led is off set side to -1
+        ledState(i,1) = 0;                                                  %% if led is off set column 1 digit to 0
+        ledState(i,2) = -1;                                                 %% Since led is off set side to -1
     end
 end
 
 %% ======== Trial Stats ====== %%
 trialStats = table;
 
-trialStats.StartFrame = find(ledState(:,1), 1, 'first'); %%Find the start of trial one
-trialCounter = 1;                               %% Initialize to trial one
-firstFound = true;                              %% Start frame has been found
+trialStats.StartFrame = find(ledState(:,1), 1, 'first');                    %%Find the start of trial one
+trialCounter = 1;                                                           %% Initialize to trial one
+firstFound = true;                                                          %% Start frame has been found
   
-for i = (trialStats.StartFrame(1)+1):length(ledState)        %% Start one frame after trial 1 start and iterate to end
-    if(firstFound)                              %% Search for the first instance of 0 (led OFF) after the start of a trial
-        if(ledState(i,1) == 0)                  %% This will be the end of the respective trial
-            trialStats.EndFrame(trialCounter) = i;        %% Set end frame to current index
-            trialCounter = trialCounter + 1;    %% Advance trial counter
-            firstFound = false;                 %% Reset firstFound so we can search for the first index of the next trial
+for i = (trialStats.StartFrame(1)+1):length(ledState)                       %% Start one frame after trial 1 start and iterate to end
+    if(firstFound)                                                          %% Search for the first instance of 0 (led OFF) after the start of a trial
+        if(ledState(i,1) == 0)                                              %% This will be the end of the respective trial
+            trialStats.EndFrame(trialCounter) = i;                          %% Set end frame to current index
+            trialCounter = trialCounter + 1;                                %% Advance trial counter
+            firstFound = false;                                             %% Reset firstFound so we can search for the first index of the next trial
         end
     else
-        if(ledState(i,1) == 1)                  %% If we have not found the first frame of the trial, look for it
+        if(ledState(i,1) == 1)                                              %% If we have not found the first frame of the trial, look for it
             firstFound = true;
-            trialStats.StartFrame(trialCounter) = i;         %% Set first frame of this new trial to current index once found
+            trialStats.StartFrame(trialCounter) = i;                        %% Set first frame of this new trial to current index once found
         end
     end
     
-    if(i == length(ledState))                   %% Edge case for if the last frame is during a trial it will set the end frame to the last index
-        if(firstFound)                          %% Typically not the case, but incase of a crash or video failure 
+    if(i == length(ledState))                                               %% Edge case for if the last frame is during a trial it will set the end frame to the last index
+        if(firstFound)                                                      %% Typically not the case, but incase of a crash or video failure 
             trialStats.EndFrame(trialCounter) = i;
         end
     end
 end
 
-%numTrials = length(ExperimentData.trialNumber);   %%This is the real way to do it just does not work with the test data
-numTrials = length(trialStats.StartFrame);
+numTrials = length(ExperimentData.trialNumber);                             %%This is the real way to do it just does not work with the test data
+%numTrials = length(trialStats.StartFrame);
 
 for j = 1:numTrials
-    trialStats.TrialType(j) = ledState(trialStats.StartFrame(j),2);      %% Set whether a specific trial is an L (0) or R (1) trial in col 3   
+    trialStats.TrialType(j) = ledState(trialStats.StartFrame(j),2);         %% Set whether a specific trial is an L (0) or R (1) trial in col 3   
 end
 
 trialStats.odor = Odors(1:length(trialStats.StartFrame));
@@ -200,20 +200,43 @@ bodyDistance = zeros(totalFrames, 1);
 
 for index = 1:totalFrames-1 
 %%=======Nose Distance=======%%
-       pair1 = [noseCoords(index,1) noseCoords(index,2)];       %% Get the first ordered pair
-       pair2 = [noseCoords(index+1,1) noseCoords(index+1,2)];   %% Get the next ordered pair in line
-       coordinate = [pair1; pair2];                             %% Vertically concatenate the two pairs into a 2x2 matrix
-       noseDistance(index) = pdist(coordinate);                 %% Get the euclidean distance between the two points
+       pair1 = [noseCoords(index,1) noseCoords(index,2)];                   %% Get the first ordered pair
+       pair2 = [noseCoords(index+1,1) noseCoords(index+1,2)];               %% Get the next ordered pair in line
+       coordinate = [pair1; pair2];                                         %% Vertically concatenate the two pairs into a 2x2 matrix
+       noseDistance(index) = pdist(coordinate);                             %% Get the euclidean distance between the two points
 %%=======Body Distance=======%%
-       pair1 = [bodyCoords(index,1) bodyCoords(index,2)];       %% Get the first ordered pair
-       pair2 = [bodyCoords(index+1,1) bodyCoords(index+1,2)];   %% Get the next ordered pair in line
-       coordinate = [pair1; pair2];                             %% Vertically concatenate the two pairs into a 2x2 matrix
-       bodyDistance(index) = pdist(coordinate);                 %% Get the euclidean distance between the two points 
+       pair1 = [bodyCoords(index,1) bodyCoords(index,2)];                   %% Get the first ordered pair
+       pair2 = [bodyCoords(index+1,1) bodyCoords(index+1,2)];               %% Get the next ordered pair in line
+       coordinate = [pair1; pair2];                                         %% Vertically concatenate the two pairs into a 2x2 matrix
+       bodyDistance(index) = pdist(coordinate);                             %% Get the euclidean distance between the two points 
 end
 
 
-totalDistance_nose = sum(noseDistance); %% Total distance the nose traveled 
-totalDistance_body = sum(bodyDistance); %% Total distance the body traveled
+totalDistance_nose = sum(noseDistance);                                     %% Total distance the nose traveled 
+totalDistance_body = sum(bodyDistance);                                     %% Total distance the body traveled
+
+%%======= % Distance Change / Time ==========%%
+%percentChange = (bodyDistance / totalDistance_body) *100;                  %% Divide our small changes by total change to get % change
+
+for i = 0:floor(totalFrames/framerate)-1                                    %% Bin data by adding distance changes over *framerate* length bins
+    changeSum = 0;                                                          %% disregards last few frames due to rounding totalFrames/framerate down
+
+    for j = 1:framerate
+       changeSum = changeSum + bodyDistance(int32(j+(i*framerate)));
+    end
+    
+    binnedPercentChange(i+1,1) = changeSum;
+    
+end
+
+percentChange = binnedPercentChange / totalDistance_body;
+
+plot(1:floor(totalFrames/framerate), percentChange);                        %% Graph these relative to our frames
+title('% Change in Distance over Time');
+xlabel('Time (s)');
+ylabel('Percent total movement');
+
+
 
 %% ======= Per Trial Distance  ======= %%
 
@@ -225,11 +248,11 @@ for i = 1:length(trialStats.StartFrame)
 end
 
 %% ======= Speeds (Gotta go fast boi) ==== %%
-noseSpeed(:,1) = noseDistance/timePerFrame;
-bodySpeed(:,1) = bodyDistance/timePerFrame;
+noseSpeed(:,1) = movmean(noseDistance/timePerFrame, frames_to_average);
+bodySpeed(:,1) = movmean(bodyDistance/timePerFrame, frames_to_average);
 
-averageNoseSpeed = mean(noseSpeed(:,1)); %% PX/Second
-averageBodySpeed = mean(bodySpeed(:,1)); %% PX/Second
+averageNoseSpeed = mean(noseSpeed(:,1));                                    %% PX/Second
+averageBodySpeed = mean(bodySpeed(:,1));                                    %% PX/Second
 
 for i = 1:length(trialStats.StartFrame)
     trialStats.averageTrialNoseSpeed(i) = mean(noseSpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
@@ -239,6 +262,14 @@ for i = 1:length(trialStats.StartFrame)
     trialStats.maxTrialBodySpeed(i) = max(bodySpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
     trialStats.minTrialBodySpeed(i) = min(bodySpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
 end
+
+
+
+%%======= Speed / Time ==========%
+plot(1:totalFrames, bodySpeed);                                             %% Graph these relative to our frames
+title('Body Speed over Time');
+xlabel('Time (frames)');
+ylabel('Body Speed (px/s)');
 
 %% ======= Time in ROI ======= %%
 for i = 1:numTrials
@@ -259,4 +290,3 @@ for i = 1:numTrials
     trialStats.RROI_Body_Time(i) = sum(inR)*timePerFrame;
 
 end
-
