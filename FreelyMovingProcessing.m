@@ -225,13 +225,13 @@ for i = 0:floor(totalFrames/framerate)-1                                    %% B
        changeSum = changeSum + bodyDistance(int32(j+(i*framerate)));
     end
     
-    binnedPercentChange(i+1,1) = changeSum;
+    binnedPercentChange(i+1,1) = changeSum; 
     
 end
 
 percentChange = binnedPercentChange / totalDistance_body;
 
-plot(1:floor(totalFrames/framerate), percentChange);                        %% Graph these relative to our frames
+percentChangePlot = plot(1:floor(totalFrames/framerate), percentChange);    %% Graph these relative to our frames
 title('% Change in Distance over Time');
 xlabel('Time (s)');
 ylabel('Percent total movement');
@@ -266,7 +266,7 @@ end
 
 
 %%======= Speed / Time ==========%
-plot(1:totalFrames, bodySpeed);                                             %% Graph these relative to our frames
+velocityPlot = plot(1:totalFrames, bodySpeed);                              %% Graph these relative to our frames
 title('Body Speed over Time');
 xlabel('Time (frames)');
 ylabel('Body Speed (px/s)');
@@ -290,3 +290,28 @@ for i = 1:numTrials
     trialStats.RROI_Body_Time(i) = sum(inR)*timePerFrame;
 
 end
+
+%% ====== Total Stats ===== %
+totalStats = table;
+
+totalStats.TotalBodyDistance = totalDistance_body;
+totalStats.AverageBodySpeed = averageBodySpeed;
+totalStats.MaxBodySpeed = max(bodySpeed);
+
+%% ======= Heatmaps ======== %
+map = ones(floor(max(bodyCoords(:,1))), floor(max(bodyCoords(:,2))));
+for i = 1:length(bodyCoords)
+   x = floor(bodyCoords(i,1));
+   y = floor(bodyCoords(i,2));
+   
+   map(x,y) = map(x,y) + 1;
+end
+map = map*10000;
+
+colormap('hot');
+figure1 = histogram2(bodyCoords(:,1),bodyCoords(:,2),[(floor(max(bodyCoords(:,1)))),floor(max(bodyCoords(:,2)))],'DisplayStyle','tile')
+savefig('histogram2.fig');
+figure()
+colormap('hot');
+figure2 = imagesc(map)
+savefig('iamgesc.fig');
