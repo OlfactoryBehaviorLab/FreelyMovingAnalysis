@@ -15,6 +15,8 @@ PoseData.Properties.VariableNames = ["index","noseX", "noseY", "noseLike", "head
      "LHeadbarX", "LHeadbarY", "LHeadbarLike", "RHeadbarX", "RHeadbarY", "RHeadbarLike", "bodyX", "bodyY", "bodyLike",...
      "rearX","rearY","rearLike","LEDX","LEDY","LEDLike"]; %%Resets all of the headers to make grabbing data easier; head/cannula/endoscope will all be called 'head' here for simplicity
 PoseData = PoseData((3:end),:);
+prefix = file(1:7);
+
 
 %Import Experimental H5
 [file, path] = uigetfile('*.h5', 'Select Eperiment Output:', 'D:\');
@@ -23,7 +25,6 @@ ExperimentData = h5read(strcat(path,file),"/Trials");
 %Extract odors from the H5
 ImportOdors = ExperimentData.odor';
 Odors = cell(length(ImportOdors),1);
-MouseName = strcat("SCAN-", num2str(ExperimentData.mouse(1)));
 
 for i = 1: length(Odors)
     Odors{i} = [ImportOdors(i,find(~isspace(ImportOdors(i,:))))];
@@ -37,7 +38,6 @@ framerate = video.framerate;
 timePerFrame = 1/framerate;
 totalFrames = length(PoseData.index);
 state = -1;
-prefix = video.Name(1:7);
 
 if(PoseData.noseX(totalFrames) == 0)
     PoseData(totalFrames,:) = [];
@@ -202,7 +202,6 @@ for i = (trialStats.StartFrame(1)+1):length(ledState)                       %% S
 end
 
 numTrials = length(ExperimentData.trialNumber);                             %%This is the real way to do it just does not work with the test data
-%numTrials = length(trialStats.StartFrame);
 
 for j = 1:numTrials
     trialStats.TrialType(j) = ledState(trialStats.StartFrame(j),2);         %% Set whether a specific trial is an L (0) or R (1) trial in col 3   
@@ -289,24 +288,45 @@ xlabel('Time (frames)');
 ylabel('Body Speed (px/s)');
 
 %% ======= Time in ROI ======= %%
+ROIStats = table;
+
 for i = 1:numTrials
-    trialStats.LROI_Nose_Time(i) = 0;
-    trialStats.RROI_Nose_Time(i) = 0;
-    trialStats.LROI_Body_Time(i) = 0;
-    trialStats.RROI_Body_Time(i) = 0;
+%   trialStats.LROI_Nose_Time(i) = 0;
+%   trialStats.RROI_Nose_Time(i) = 0;
+%   trialStats.LROI_Body_Time(i) = 0;
+%   trialStats.RROI_Body_Time(i) = 0;
+    ROIStats.PreTimeBodyLROI(i) = 0;
+    ROIStats.PreTimeBodyRROI(i) = 0;
+    ROIStats.TimeBodyLROI(i) = 0;
+    ROIStats.TimeBodyRROI(i) = 0;
+
     startFrame = trialStats.StartFrame(i);
     endFrame = trialStats.EndFrame(i);
+ 
     
-    [inL] = inpolygon(noseCoords(startFrame:endFrame,1),noseCoords(startFrame:endFrame,2),odorLROI(1,:),odorLROI(2,:));
-    trialStats.LROI_Nose_Time(i) = sum(inL)*timePerFrame;
-    [inR] =  inpolygon(noseCoords(startFrame:endFrame,1),noseCoords(startFrame:endFrame,2),odorRROI(1,:),odorRROI(2,:));
-    trialStats.RROI_Nose_Time(i) = sum(inR)*timePerFrame;
-    [inL] = inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorLROI(1,:),odorLROI(2,:));
-    trialStats.LROI_Body_Time(i) = sum(inL)*timePerFrame;
-    [inR] =  inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorRROI(1,:),odorRROI(2,:));
-    trialStats.RROI_Body_Time(i) = sum(inR)*timePerFrame;
-
+%   [inL] = inpolygon(noseCoords(startFrame:endFrame,1),noseCoords(startFrame:endFrame,2),odorLROI(1,:),odorLROI(2,:));
+%   trialStats.LROI_Nose_Time(i) = sum(inL)*timePerFrame;
+%   [inR] =  inpolygon(noseCoords(startFrame:endFrame,1),noseCoords(startFrame:endFrame,2),odorRROI(1,:),odorRROI(2,:));
+%   trialStats.RROI_Nose_Time(i) = sum(inR)*timePerFrame;
+    [inL] = inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorLROI(:,1),odorLROI(:,2));         %Not 100% sure this works as intended
+    ROIStats.TimeBodyLROI(i) = sum(inL)*timePerFrame;
+    [inR] =  inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorRROI(:,1),odorRROI(:,2));
+    ROIStats.TimeBodyRROI(i) = sum(inR)*timePerFrame;
+    
+    if i ~= 1                                                               % Trial one does not always have enough time beforehand; either ignore or find workaround
+        preTimeStartFrame = startFrame - (framerate*10-1);
+        preTimeEndFrame = startFrame - 1;
+        [inL] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame,1),bodyCoords(preTimeStartFrame:preTimeEndFrame,2),odorLROI(:,1),odorLROI(:,1));
+        ROIStats.PreTimeBodyLROI(i) = sum(inL) * timePerFrame;
+        [inR] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame,1),bodyCoords(preTimeStartFrame:preTimeEndFrame,2),odorRROI(:,1),odorRROI(:,2));
+        ROIStats.PreTimeBodyRROI(i) = sum(inR) * timePerFrame;
+    end
 end
+ROIStats.TotalPreTimeBodyLROI(1) = sum(ROIStats.PreTimeBodyLROI);
+ROIStats.TotalPreTimeBodyRROI(1) = sum(ROIStats.PreTimeBodyRROI);
+ROIStats.TotalTimeBodyLROI(1) = sum(ROIStats.TimeBodyLROI);
+ROIStats.TotalTimeBodyRROI(1) = sum(ROIStats.TimeBodyRROI);
+
 
 %% ====== Total Stats ======== %
 totalStats = table;
@@ -321,6 +341,7 @@ mkdir(path);
 cd(path);
 writetable(totalStats,strcat(prefix,'-totalStats.xlsx'), 'Sheet','Data');
 writetable(table(percentChange),strcat(prefix,'-PercentChangePos.xlsx'),'Sheet','Data','WriteVariableNames',0);
+writetable(ROIStats,strcat(prefix,'-ROIStats.xlsx'), 'Sheet','Data');
 
 %Positional Heatmap
 colormap('hot');
