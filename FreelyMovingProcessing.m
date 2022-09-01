@@ -23,6 +23,7 @@ ExperimentData = h5read(strcat(path,file),"/Trials");
 %Extract odors from the H5
 ImportOdors = ExperimentData.odor';
 Odors = cell(length(ImportOdors),1);
+MouseName = strcat("SCAN-", num2str(ExperimentData.mouse(1)));
 
 for i = 1: length(Odors)
     Odors{i} = [ImportOdors(i,find(~isspace(ImportOdors(i,:))))];
@@ -36,12 +37,18 @@ framerate = video.framerate;
 timePerFrame = 1/framerate;
 totalFrames = length(PoseData.index);
 state = -1;
-%% ======= Initial Settings ==== %%
+prefix = video.Name(1:7);
+
+if(PoseData.noseX(totalFrames) == 0)
+    PoseData(totalFrames,:) = [];
+end
+
+%% ======= Initial Settings ======= %%
 initialSettings = inputApp;
 initialSettings.Settings.Visible = 1;
 uiwait(initialSettings.UIFigure);
 
-%% ======= ROI Determination ==== %%
+%% ======= ROI Determination ======= %%
 odorLROI = zeros(4,2); 
 odorRROI = zeros(4,2);
 
@@ -111,7 +118,7 @@ while state ~= 1
     end
 end
 
-%% ======= X/Y Coordinates ===== %%
+%% ======= X/Y Coordinates ======= %%
 noseCoords = [PoseData.noseX, PoseData.noseY];
 headCoords = [PoseData.headX, PoseData.headY];
 LHeadbarCoords = [PoseData.LHeadbarX, PoseData.LHeadbarY];
@@ -120,7 +127,17 @@ bodyCoords = [PoseData.bodyX, PoseData.bodyY];
 rearCoords = [PoseData.rearX, PoseData.rearY];
 LEDCoords = [PoseData.LEDX, PoseData.LEDY];
 
-%% ======== Certainty Values ====== %
+% Create positional heatmap
+map = ones(floor(max(bodyCoords(:,1))), floor(max(bodyCoords(:,2))));
+for i = 1:length(bodyCoords)
+   x = floor(bodyCoords(i,1));
+   y = floor(bodyCoords(i,2));
+   
+   map(x,y) = map(x,y) + 1;
+end
+map = map*10000;
+
+%% ======== Certainty Values ======== %%
 
 noseLike = [PoseData.noseLike];
 headLike = [PoseData.headLike];
@@ -130,7 +147,7 @@ bodyLike = [PoseData.bodyLike];
 rearLike = [PoseData.rearLike];
 LEDLike = [PoseData.LEDLike];
 
-%% ======== Bad Frames ======= %
+%% ======== Bad Frames ======= %%
 %%Gather all of the indicies (frame number + 1) where the certainty is below our
 %%defined threshold
 badNoseFrames = find(noseLike < confidenceThreshold);
@@ -231,13 +248,6 @@ end
 
 percentChange = binnedPercentChange / totalDistance_body;
 
-percentChangePlot = plot(1:floor(totalFrames/framerate), percentChange);    %% Graph these relative to our frames
-title('% Change in Distance over Time');
-xlabel('Time (s)');
-ylabel('Percent total movement');
-
-
-
 %% ======= Per Trial Distance  ======= %%
 
 for i = 1:length(trialStats.StartFrame)
@@ -267,6 +277,13 @@ end
 
 %%======= Speed / Time ==========%
 velocityPlot = plot(1:totalFrames, bodySpeed);                              %% Graph these relative to our frames
+% hold on;
+% trialLine = zeros(totalFrames,1);
+% for i = 1:length(trialStats.StartFrame)
+%    trialLine(trialStats.StartFrame(i):trialStats.EndFrame(i)) =1000; 
+% end
+% plot(1:totalFrames, trialLine,'b-');
+% hold off;
 title('Body Speed over Time');
 xlabel('Time (frames)');
 ylabel('Body Speed (px/s)');
@@ -291,27 +308,31 @@ for i = 1:numTrials
 
 end
 
-%% ====== Total Stats ===== %
+%% ====== Total Stats ======== %
 totalStats = table;
 
 totalStats.TotalBodyDistance = totalDistance_body;
 totalStats.AverageBodySpeed = averageBodySpeed;
 totalStats.MaxBodySpeed = max(bodySpeed);
 
-%% ======= Heatmaps ======== %
-map = ones(floor(max(bodyCoords(:,1))), floor(max(bodyCoords(:,2))));
-for i = 1:length(bodyCoords)
-   x = floor(bodyCoords(i,1));
-   y = floor(bodyCoords(i,2));
-   
-   map(x,y) = map(x,y) + 1;
-end
-map = map*10000;
+%% ======= EXPORT DATA ======= %
+path = strcat('.\\Output\', prefix);
+mkdir(path);
+cd(path);
+writetable(totalStats,strcat(prefix,'-totalStats.xlsx'), 'Sheet','Data');
+writetable(table(percentChange),strcat(prefix,'-PercentChangePos.xlsx'),'Sheet','Data','WriteVariableNames',0);
 
+%Positional Heatmap
 colormap('hot');
-figure1 = histogram2(bodyCoords(:,1),bodyCoords(:,2),[(floor(max(bodyCoords(:,1)))),floor(max(bodyCoords(:,2)))],'DisplayStyle','tile')
-savefig('histogram2.fig');
-figure()
-colormap('hot');
-figure2 = imagesc(map)
-savefig('iamgesc.fig');
+histogram2(bodyCoords(:,1),bodyCoords(:,2),[(floor(max(bodyCoords(:,1)))),floor(max(bodyCoords(:,2)))],'DisplayStyle','tile')
+savefig(strcat(prefix,'-PosHeatmap.fig'));
+
+%Percent Change Plot
+plot(1:floor(totalFrames/framerate), percentChange);    %% Graph these relative to our frames
+title('% Change in Distance over Time');
+xlabel('Time (s)');
+ylabel('Percent total movement');
+graph = gcf;
+exportgraphics(graph,strcat(prefix,'-percentChange.tiff'));
+cd ../..
+
