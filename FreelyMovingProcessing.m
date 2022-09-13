@@ -42,7 +42,7 @@ opts = setvartype(opts,1,'double');
 try
     PoseData = readtable(poseDataPath,opts);                                        % Try to open the PoseData file
 catch                                                                               % If it fails, skip to the next file
-    fprintf(2,'Unable to open PoseData file! Trying next file!\n');
+    fprintf(2,strcat('Unable to open PoseData file! Trying next file!\n');
     continue;
 end
 
@@ -64,7 +64,7 @@ end
 try
     ExperimentData = h5read(experiementDataPath,"/Trials");                         %% Try to import the H5 File, if it doesn't work or doesn't exist, skip to the next PoseData file
 catch
-    fprintf(2, strcat('Unable to open Experimental Data File: ',experiementDataPath,'! Trying next file!\n'));
+    fprintf(2, strcat('Unable to open Experimental Data File: ', FileStem,'.h5! Trying next file!\n'));
     continue;
 end
 
@@ -82,7 +82,7 @@ end
 try
     video = VideoReader(videoPath);                                                 %% Try to import the video, if it doesn't work or doesn't exist, skip to the next PoseData file!
 catch
-    fprintf(2,strcat('Cannot open video file: ', videoPath,'! Trying next file!'));
+    fprintf(2,strcat('Cannot open video file: ', FileStem,'.mp4! Trying next file!'));
     continue;
 end
 
@@ -169,15 +169,8 @@ bodyCoords = [PoseData.bodyX, PoseData.bodyY];
 rearCoords = [PoseData.rearX, PoseData.rearY];
 LEDCoords = [PoseData.LEDX, PoseData.LEDY];
 
-% Create positional heatmap
-map = ones(floor(max(bodyCoords(:,1))), floor(max(bodyCoords(:,2))));
-for i = 1:length(bodyCoords)
-   x = floor(bodyCoords(i,1));
-   y = floor(bodyCoords(i,2));
-   
-   map(x,y) = map(x,y) + 1;
-end
-map = map*10000;
+bodyCoords(:,2) = abs(headCoords(:,2)-video.Height);
+
 
 %% ======== Certainty Values ======== %%
 
@@ -277,7 +270,7 @@ totalDistance_body = sum(bodyDistance(trialStats.StartFrame(1):trialStats.EndFra
 experimentStartFrame = trialStats.StartFrame(1);
 experimentEndFrame = trialStats.EndFrame(numTrials);
 
-for i = 0:floor((experimentEndFrame-experimentStartFrame)/framerate)-1                           %% Bin data by adding distance changes over *framerate* length bins minus the endFrame
+for i = 0:floor((experimentEndFrame-experimentStartFrame)/framerate)-1      %% Bin data by adding distance changes over *framerate* length bins minus the endFrame
     changeSum = 0;                                                          %% May discard last few frames due to rounding totalFrames/framerate down
 
     for j = 1:framerate
@@ -317,7 +310,7 @@ end
 
 %% ======= Time in ROI ======= %%
 ROIStats = table;
-
+centralROI = [700,475;700,625;1100,475;1100,625]
 for i = 1:numTrials
 %   trialStats.LROI_Nose_Time(i) = 0;
 %   trialStats.RROI_Nose_Time(i) = 0;
@@ -340,20 +333,33 @@ for i = 1:numTrials
     ROIStats.TimeBodyLROI(i) = sum(inL)*timePerFrame;
     [inR] =  inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorRROI(:,1),odorRROI(:,2));
     ROIStats.TimeBodyRROI(i) = sum(inR)*timePerFrame;
-    
+    [inC] = inpolygon(bodyCoords(startFrame:endFrame, 1), bodyCoords(startFrame:endFrame,2),centralROI(:,1),centralROI(:,2));
+    ROIStats.TimeBodyCROI(i) = sum(inC)*timePerFrame;
     if i ~= 1                                                               % Trial one does not always have enough time beforehand; either ignore or find workaround
         preTimeStartFrame = startFrame - (framerate*10-1);
         preTimeEndFrame = startFrame - 1;
-        [inL] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame,1),bodyCoords(preTimeStartFrame:preTimeEndFrame,2),odorLROI(:,1),odorLROI(:,1));
+        [inL] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame,1),bodyCoords(preTimeStartFrame:preTimeEndFrame,2),odorLROI(:,1),odorLROI(:,2));
         ROIStats.PreTimeBodyLROI(i) = sum(inL) * timePerFrame;
         [inR] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame,1),bodyCoords(preTimeStartFrame:preTimeEndFrame,2),odorRROI(:,1),odorRROI(:,2));
         ROIStats.PreTimeBodyRROI(i) = sum(inR) * timePerFrame;
+        [inC] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame, 1), bodyCoords(preTimeStartFrame:preTimeEndFrame,2),centralROI(:,1),centralROI(:,2));
+        ROIStats.PreTimeBodyCROI(i) = sum(inC)*timePerFrame;
     end
 end
 ROIStats.TotalPreTimeBodyLROI(1) = sum(ROIStats.PreTimeBodyLROI);
 ROIStats.TotalPreTimeBodyRROI(1) = sum(ROIStats.PreTimeBodyRROI);
+ROIStats.TotalPreTimeBodyCROI(1) = sum(ROIStats.PreTimeBodyCROI);
 ROIStats.TotalTimeBodyLROI(1) = sum(ROIStats.TimeBodyLROI);
 ROIStats.TotalTimeBodyRROI(1) = sum(ROIStats.TimeBodyRROI);
+ROIStats.TotalTimeBodyCROI(1) = sum(ROIStats.TimeBodyCROI);
+
+%% ====== Aversion Index ====== %%
+% Defined as preRoiTime - ROITime for the active ROI during an odor presentation
+
+
+
+
+
 
 
 %% ====== Total Stats ======== %
@@ -375,6 +381,13 @@ writetable(ROIStats,strcat(prefix,'-ROIStats.xlsx'), 'Sheet','Data');
 colormap('hot');
 histogram2(bodyCoords(:,1),bodyCoords(:,2),[(floor(max(bodyCoords(:,1)))),floor(max(bodyCoords(:,2)))],'DisplayStyle','tile')
 savefig(strcat(prefix,'-PosHeatmap.fig'));
+hold on;
+colormap('parula')
+imagesc(readFrame(video));
+histogram2(bodyCoords(:,1),bodyCoords(:,2),[(floor(max(bodyCoords(:,1)))),floor(max(bodyCoords(:,2)))],'DisplayStyle','tile')
+savefig(strcat(prefix,'-PosHeatmap-Img.fig'));
+hold off;
+
 
 %Percent Change Plot
 plot(1:floor((experimentEndFrame-experimentStartFrame)/framerate), percentChange);    %% Graph these relative to our frames
