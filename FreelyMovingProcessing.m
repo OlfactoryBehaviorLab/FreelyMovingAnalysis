@@ -39,17 +39,18 @@ videoPath = strcat(videoDir, '\', fileStem,'.mp4');                             
 
 opts = detectImportOptions(poseDataPath);
 opts = setvartype(opts,1,'double');
+
 try
     PoseData = readtable(poseDataPath,opts);                                        % Try to open the PoseData file
 catch                                                                               % If it fails, skip to the next file
-    fprintf(2,strcat('Unable to open PoseData file! Trying next file!\n');
+    fprintf(2,strcat('Unable to open PoseData file! Trying next file!\n'));
     continue;
 end
 
 PoseData.Properties.VariableNames = ["index","noseX", "noseY", "noseLike", "headX", "headY",  "headLike",...
      "LHeadbarX", "LHeadbarY", "LHeadbarLike", "RHeadbarX", "RHeadbarY", "RHeadbarLike", "bodyX", "bodyY", "bodyLike",...
      "rearX","rearY","rearLike","LEDX","LEDY","LEDLike"];                           %%Resets all of the headers to make grabbing data easier; head/cannula/endoscope will all be called 'head' here for simplicity
-PoseData = PoseData((1:end),:);
+%PoseData = PoseData((1:end),:);
 prefix = fileStem(1:7);
 
 totalFrames = length(PoseData.index);
@@ -64,7 +65,7 @@ end
 try
     ExperimentData = h5read(experiementDataPath,"/Trials");                         %% Try to import the H5 File, if it doesn't work or doesn't exist, skip to the next PoseData file
 catch
-    fprintf(2, strcat('Unable to open Experimental Data File: ', FileStem,'.h5! Trying next file!\n'));
+    fprintf(2, strcat('Unable to open Experimental Data File: ', fileStem,'.h5! Trying next file!\n'));
     continue;
 end
 
@@ -74,15 +75,15 @@ numTrials = length(ExperimentData.trialNumber);                                 
 ImportOdors = ExperimentData.odor';                                                 %% The Odor data is stored awkwardly in the H5 (sideways and with lots of spaces
 Odors = cell(length(ImportOdors),1);                                                %% Transform the odor data and parse out all of the empty space
 
-for i = 1: length(Odors)
-    Odors{i} = [ImportOdors(i,find(~isspace(ImportOdors(i,:))))];           
+for i = 1:length(ImportOdors)
+    Odors{i} = deblank(ImportOdors(i,:));
 end
 
 %Import Video
 try
     video = VideoReader(videoPath);                                                 %% Try to import the video, if it doesn't work or doesn't exist, skip to the next PoseData file!
 catch
-    fprintf(2,strcat('Cannot open video file: ', FileStem,'.mp4! Trying next file!'));
+    fprintf(2,strcat('Cannot open video file: ', fileStem,'.mp4! Trying next file!'));
     continue;
 end
 
@@ -183,8 +184,7 @@ rearLike = [PoseData.rearLike];
 LEDLike = [PoseData.LEDLike];
 
 %% ======== Bad Frames ======= %%
-%%Gather all of the indicies (frame number + 1) where the certainty is below our
-%%defined threshold
+%Gather all of the indicies (frame number + 1) where the certainty is below our defined threshold
 badNoseFrames = find(noseLike < confidenceThreshold);
 badHeadFrames = find(headLike < confidenceThreshold);
 badLHFrames = find (LHeadbarLike < confidenceThreshold);
@@ -236,6 +236,9 @@ for i = (trialStats.StartFrame(1)+1):length(ledState)                       %% S
     end
 end
 
+if(length(trialStats.StartFrame) ~= numTrials)                              %% If the video cuts off early, use the number of trials in video as numTrials
+    numTrials = min(numTrials, length(trialStats.StartFrame));
+end
 
 for j = 1:numTrials
     trialStats.TrialType(j) = ledState(trialStats.StartFrame(j),2);         %% Set whether a specific trial is an L (0) or R (1) trial in col 3   
@@ -255,6 +258,7 @@ for index = 1:totalFrames-1
        pair2 = [noseCoords(index+1,1) noseCoords(index+1,2)];               %% Get the next ordered pair in line
        coordinate = [pair1; pair2];                                         %% Vertically concatenate the two pairs into a 2x2 matrix
        noseDistance(index) = pdist(coordinate);                             %% Get the euclidean distance between the two points
+       
 %%=======Body Distance=======%%
        pair1 = [bodyCoords(index,1) bodyCoords(index,2)];                   %% Get the first ordered pair
        pair2 = [bodyCoords(index+1,1) bodyCoords(index+1,2)];               %% Get the next ordered pair in line
@@ -306,11 +310,16 @@ for i = 1:numTrials
     trialStats.minTrialBodySpeed(i) = min(bodySpeed(trialStats.StartFrame(i):trialStats.EndFrame(i)));
 end
 
+%% ====== Total Stats ======== %
+totalStats = table;
 
+totalStats.TotalBodyDistance = totalDistance_body;
+totalStats.AverageBodySpeed = averageBodySpeed;
+totalStats.MaxBodySpeed = max(bodySpeed(experimentStartFrame:experimentEndFrame));
 
 %% ======= Time in ROI ======= %%
 ROIStats = table;
-centralROI = [700,475;700,625;1100,475;1100,625]
+centralROI = [700,475;700,625;1100,475;1100,625];
 for i = 1:numTrials
 %   trialStats.LROI_Nose_Time(i) = 0;
 %   trialStats.RROI_Nose_Time(i) = 0;
@@ -318,7 +327,9 @@ for i = 1:numTrials
 %   trialStats.RROI_Body_Time(i) = 0;
     ROIStats.PreTimeBodyLROI(i) = 0;
     ROIStats.PreTimeBodyRROI(i) = 0;
+    ROIStats.PreTimeBodyCROI(i) = 0;
     ROIStats.TimeBodyLROI(i) = 0;
+    ROIStats.TimeBodyRROI(i) = 0;
     ROIStats.TimeBodyRROI(i) = 0;
 
     startFrame = trialStats.StartFrame(i);
@@ -329,12 +340,12 @@ for i = 1:numTrials
 %   trialStats.LROI_Nose_Time(i) = sum(inL)*timePerFrame;
 %   [inR] =  inpolygon(noseCoords(startFrame:endFrame,1),noseCoords(startFrame:endFrame,2),odorRROI(1,:),odorRROI(2,:));
 %   trialStats.RROI_Nose_Time(i) = sum(inR)*timePerFrame;
-    [inL] = inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorLROI(:,1),odorLROI(:,2));         %Not 100% sure this works as intended
-    ROIStats.TimeBodyLROI(i) = sum(inL)*timePerFrame;
+    [inL] = inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorLROI(:,1),odorLROI(:,2));         
+    ROIStats.TimeBodyLROI(i) = sum(inL) * timePerFrame;
     [inR] =  inpolygon(bodyCoords(startFrame:endFrame,1),bodyCoords(startFrame:endFrame,2),odorRROI(:,1),odorRROI(:,2));
-    ROIStats.TimeBodyRROI(i) = sum(inR)*timePerFrame;
+    ROIStats.TimeBodyRROI(i) = sum(inR) * timePerFrame;
     [inC] = inpolygon(bodyCoords(startFrame:endFrame, 1), bodyCoords(startFrame:endFrame,2),centralROI(:,1),centralROI(:,2));
-    ROIStats.TimeBodyCROI(i) = sum(inC)*timePerFrame;
+    ROIStats.TimeBodyCROI(i) = sum(inC) * timePerFrame;
     if i ~= 1                                                               % Trial one does not always have enough time beforehand; either ignore or find workaround
         preTimeStartFrame = startFrame - (framerate*10-1);
         preTimeEndFrame = startFrame - 1;
@@ -343,31 +354,71 @@ for i = 1:numTrials
         [inR] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame,1),bodyCoords(preTimeStartFrame:preTimeEndFrame,2),odorRROI(:,1),odorRROI(:,2));
         ROIStats.PreTimeBodyRROI(i) = sum(inR) * timePerFrame;
         [inC] = inpolygon(bodyCoords(preTimeStartFrame:preTimeEndFrame, 1), bodyCoords(preTimeStartFrame:preTimeEndFrame,2),centralROI(:,1),centralROI(:,2));
-        ROIStats.PreTimeBodyCROI(i) = sum(inC)*timePerFrame;
+        ROIStats.PreTimeBodyCROI(i) = sum(inC) * timePerFrame;
     end
 end
-ROIStats.TotalPreTimeBodyLROI(1) = sum(ROIStats.PreTimeBodyLROI);
-ROIStats.TotalPreTimeBodyRROI(1) = sum(ROIStats.PreTimeBodyRROI);
-ROIStats.TotalPreTimeBodyCROI(1) = sum(ROIStats.PreTimeBodyCROI);
-ROIStats.TotalTimeBodyLROI(1) = sum(ROIStats.TimeBodyLROI);
-ROIStats.TotalTimeBodyRROI(1) = sum(ROIStats.TimeBodyRROI);
-ROIStats.TotalTimeBodyCROI(1) = sum(ROIStats.TimeBodyCROI);
+
+totalStats.TotalPreTimeBodyLROI(1) = sum(ROIStats.PreTimeBodyLROI);
+totalStats.TotalTimeBodyLROI(1) = sum(ROIStats.TimeBodyLROI);
+totalStats.TotalPreTimeBodyRROI(1) = sum(ROIStats.PreTimeBodyRROI);
+totalStats.TotalTimeBodyRROI(1) = sum(ROIStats.TimeBodyRROI);
+totalStats.TotalPreTimeBodyCROI(1) = sum(ROIStats.PreTimeBodyCROI);
+totalStats.TotalTimeBodyCROI(1) = sum(ROIStats.TimeBodyCROI);
 
 %% ====== Aversion Index ====== %%
 % Defined as preRoiTime - ROITime for the active ROI during an odor presentation
+ROIStats.trialType(1) = trialStats.TrialType(1);                            % Sets trial type for trial one since its skipped in the loop
+ROIStats.aversionIndex(1) = 0;
+ROIStats.odorCheck(1) = 0;                                                  % 1 if animal enters ROI with odor, 0 if animal does not enter ROI with odor
+for trial = 2:numTrials                                                     % Ignore trial one due to no pretrial ROI time
+    if trialStats.TrialType(trial) == 0
+        ROIStats.trialType(trial) = 0;
+        if(ROIStats.TimeBodyLROI(trial) ~= 0)
+            ROIStats.odorCheck(trial) = 1; 
+            ROIStats.aversionIndex(trial) =  ROIStats.TimeBodyLROI(trial) - ROIStats.PreTimeBodyLROI(trial);
+        end     
+    elseif trialStats.TrialType(trial) == 1
+        ROIStats.trialType(trial) = 1;
+        if(ROIStats.TimeBodyRROI(trial) ~= 0)
+            ROIStats.odorCheck(trial) = 1;
+            ROIStats.aversionIndex(trial) = ROIStats.TimeBodyLROI(trial) - ROIStats.PreTimeBodyLROI(trial);
+        end
+    end
+end
+
+
+%% ====== Per-Odor ROI Stats ====== %%
+individualOdors = unique(Odors);
+
+OdorStats = table();
+
+for i = 1:length(individualOdors)
+    Odor = cell2mat(individualOdors(i));
+    col1 = strcat("Odor_", Odor,"_pre");
+    col2 = strcat("Odor_", Odor, "_post");
+    col3 = strcat("Odor_", Odor, "_AI");
+    OdorStats.(col1) = zeros(numTrials,1);
+    OdorStats.(col2) = zeros(numTrials,1);
+    odorTrials = find(strcmp(trialStats.odor, Odor));
+    
+    for trials = 1:length(odorTrials)
+        currentTrial = odorTrials(trials);
+        if(trialStats.TrialType(currentTrial) == 0)
+            OdorStats.(col1)(currentTrial) = ROIStats.PreTimeBodyLROI(currentTrial);
+            OdorStats.(col2)(currentTrial) = ROIStats.TimeBodyLROI(currentTrial);
+        else
+            OdorStats.(col1)(currentTrial) = ROIStats.PreTimeBodyRROI(currentTrial);
+            OdorStats.(col2)(currentTrial) = ROIStats.TimeBodyRROI(currentTrial);
+        end
+    end
+
+    totalStats.(col3) = sum(OdorStats.(col2)) - sum(OdorStats.(col1))  ;       % Per Odor Aversion Index
+end
 
 
 
 
 
-
-
-%% ====== Total Stats ======== %
-totalStats = table;
-
-totalStats.TotalBodyDistance = totalDistance_body;
-totalStats.AverageBodySpeed = averageBodySpeed;
-totalStats.MaxBodySpeed = max(bodySpeed(experimentStartFrame:experimentEndFrame));
 
 %% ======= EXPORT DATA ======= %
 path = strcat('.\\Output\', prefix);
@@ -376,7 +427,7 @@ cd(path);
 writetable(totalStats,strcat(prefix,'-totalStats.xlsx'), 'Sheet','Data');
 writetable(table(percentChange),strcat(prefix,'-PercentChangePos.xlsx'),'Sheet','Data','WriteVariableNames',0);
 writetable(ROIStats,strcat(prefix,'-ROIStats.xlsx'), 'Sheet','Data');
-
+writetable(OdorStats,strcat(prefix,'-OdorStats.xlsx'), 'Sheet','Data');
 %Positional Heatmap
 colormap('hot');
 histogram2(bodyCoords(:,1),bodyCoords(:,2),[(floor(max(bodyCoords(:,1)))),floor(max(bodyCoords(:,2)))],'DisplayStyle','tile')
