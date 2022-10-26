@@ -30,7 +30,7 @@ for z = 1:length(poseDataFiles)
 
 clearvars -except inputROI confidenceThreshold createVideo frames_to_average...     % Global variables we don't want to clear between runs
     ledLeftX ledRightX max_bad_frames ...
-    z experimentDataDir poseDataDir videoDir poseDataFiles immobileDir;
+    z experimentDataDir poseDataDir videoDir poseDataFiles immobileDir help;
 
 poseDataPath = strcat(poseDataFiles(z).folder,'\', poseDataFiles(z).name);          % Folder with the PoseData files
 fileStem = poseDataFiles(z).name(1:end-4);                                          % Get the AnimalName-Treatment prefix
@@ -134,13 +134,16 @@ while state ~= 1
 %     B2P1 = drawpoint('Color', 'Cyan');
 %     B2P2 = drawpoint('Color', 'Green');
 %     B3P3 = drawpoint('Color', 'Red');
-    
-    msg = msgbox('Please outline the ROI for ODOR on the Right', 'Odor','modal');
-    uiwait(msg);
+    if(help)
+        msg = msgbox('Please outline the ROI for ODOR on the Right', 'Odor','modal');
+        uiwait(msg);
+    end
     odorRight = drawrectangle('LineWidth', 7, 'Color', 'Yellow');
-    
-    msg = msgbox('Please outline the ROI for ODOR on the Left', 'Odor','modal');
-    uiwait(msg);
+
+    if(help)
+        msg = msgbox('Please outline the ROI for ODOR on the Left', 'Odor','modal');
+        uiwait(msg);
+    end
     odorLeft = drawrectangle('LineWidth', 7, 'Color', 'Magenta');
     
     confirmation = questdlg('Would you like to redraw the ROIs?' ,'Finished?', 'No, Process Video', 'Yes', 'No, Process Video');
@@ -462,9 +465,6 @@ end
 immobileTime.immobileDuration = immobileTime.EndFrame - immobileTime.StartFrame;
 
 for odor = 1:length(individualOdors)
-    immobileTime.(char(individualOdors(odor))) = zeros(length(immobileTime.StartFrame),1);
-end
-for odor = 1:length(individualOdors)
     immobileTime.(strcat(char(individualOdors(odor)), '_ROI')) = zeros(length(immobileTime.StartFrame),1);
 end
 
@@ -482,21 +482,19 @@ for j = 1:length(trialStats.StartFrame)
     
     if(trialStartFrame >= immobileStartFrame)
         trialOdor = char(trialStats.odor(j));
-        immobileTime.(trialOdor)(immobileCounter) = 1;
-            if(trialStats.TrialType(j) == 0)
-                if(ROIStats.TimeBodyLROI > 0)
-                    immobileTime.(strcat(+, '_ROI'))(immobileCounter) = 1;
-                end
-            elseif(trialStats.TrialType(j) == 1)
-                if(ROIStats.TimeBodyRROI  > 0)
-                    immobileTime.(strcat(trialodor, '_ROI'))(immobileCounter) = 1;
-                end
-            end
-
+        
+        if(ROIStats.odorCheck(j) == 1)
+            immobileTime.(strcat(trialOdor, '_ROI'))(immobileCounter) = 1;
+        end
+      
         if(immobileEndFrame <= trialEndFrame)
-            immobileCounter = immobileCounter+1;
-            immobileStartFrame = immobileTime.StartFrame(immobileCounter);
-            immobileEndFrame = immobileTime.EndFrame(immobileCounter);
+            if(immobileCounter == length(immobileTime.StartFrame))          %% If this is the last immobile period, we can stop searching through trials early.
+                break;
+            else
+                immobileCounter = immobileCounter+1;
+                immobileStartFrame = immobileTime.StartFrame(immobileCounter);
+                immobileEndFrame = immobileTime.EndFrame(immobileCounter);
+            end
         elseif(immobileEndFrame > trialEndFrame)
             continue;
         end
@@ -512,6 +510,7 @@ writetable(totalStats,strcat(prefix,'-totalStats.xlsx'), 'Sheet','Data');
 writetable(table(percentChange),strcat(prefix,'-PercentChangePos.xlsx'),'Sheet','Data','WriteVariableNames',0);
 writetable(ROIStats,strcat(prefix,'-ROIStats.xlsx'), 'Sheet','Data');
 writetable(OdorStats,strcat(prefix,'-OdorStats.xlsx'), 'Sheet','Data');
+writetable(immobileTime,strcat(prefix,'-immobileTime.xlsx'),'Sheet','Data');
 %Positional Heatmap
 colormap('hot');
 histogram2(bodyCoords(:,1),bodyCoords(:,2),[(floor(max(bodyCoords(:,1)))),floor(max(bodyCoords(:,2)))],'DisplayStyle','tile')
