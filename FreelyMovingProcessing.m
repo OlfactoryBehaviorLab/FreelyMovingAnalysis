@@ -37,6 +37,14 @@ fileStem = poseDataFiles(z).name(1:end-4);                                      
 experiementDataPath = strcat(experimentDataDir, '\', fileStem, '.h5');              % Get H5 File Folder
 videoPath = strcat(videoDir, '\', fileStem,'.mp4');                                 % Get Video Folders
 immobilePath = strcat(immobileDir, '\', fileStem, '.arch');                         % Get Folder with ARCH Files from Solomon Coder
+prefix = fileStem(1:7);
+
+path = strcat('.\\Output\', prefix);
+
+if(isfolder(path))
+    fprintf(2, strcat('Analysis for: ', prefix, ' already exists! Skipping and analyzing next file!\n'));
+    continue;
+end
 
 opts = detectImportOptions(poseDataPath);
 opts = setvartype(opts,1,'double');
@@ -52,7 +60,6 @@ PoseData.Properties.VariableNames = ["index","noseX", "noseY", "noseLike", "head
      "LHeadbarX", "LHeadbarY", "LHeadbarLike", "RHeadbarX", "RHeadbarY", "RHeadbarLike", "bodyX", "bodyY", "bodyLike",...
      "rearX","rearY","rearLike","LEDX","LEDY","LEDLike"];                           %%Resets all of the headers to make grabbing data easier; head/cannula/endoscope will all be called 'head' here for simplicity
 %PoseData = PoseData((1:end),:);
-prefix = fileStem(1:7);
 
 totalFrames = length(PoseData.index);
 
@@ -84,7 +91,7 @@ end
 try
     video = VideoReader(videoPath);                                                 %% Try to import the video, if it doesn't work or doesn't exist, skip to the next PoseData file!
 catch
-    fprintf(2,strcat('Cannot open video file: ', fileStem,'.mp4! Trying next file!'));
+    fprintf(2,strcat('Cannot open video file: ', fileStem,'.mp4! Trying next file!\n'));
     continue;
 end
 
@@ -92,7 +99,7 @@ end
 try 
     immobileFrames = readlines(immobilePath);
 catch   
-    fprintf(2,strcat('Cannot open immobile file: ', fileStem,'.arch! Trying next file!'));
+    fprintf(2,strcat('Cannot open immobile file: ', fileStem,'.arch! Trying next file!\n'));
     continue;
 end
 
@@ -503,7 +510,6 @@ end
 
 
 %% ======= EXPORT DATA ======= %
-path = strcat('.\\Output\', prefix);
 mkdir(path);
 cd(path);
 writetable(totalStats,strcat(prefix,'-totalStats.xlsx'), 'Sheet','Data');
