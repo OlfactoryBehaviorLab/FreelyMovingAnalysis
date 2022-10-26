@@ -24,18 +24,19 @@ end
 
 experimentDataDir = uigetdir('D:\', 'Select Experimental Data Folder:');
 videoDir = uigetdir('D:\', 'Select Videos Folder: ');
+immobileDir = uigetdir('D:\', 'Select Immobile Data Folder: ');
 
 for z = 1:length(poseDataFiles)
 
 clearvars -except inputROI confidenceThreshold createVideo frames_to_average...     % Global variables we don't want to clear between runs
     ledLeftX ledRightX max_bad_frames ...
-    z experimentDataDir poseDataDir videoDir poseDataFiles;
+    z experimentDataDir poseDataDir videoDir poseDataFiles immobileDir;
 
 poseDataPath = strcat(poseDataFiles(z).folder,'\', poseDataFiles(z).name);          % Folder with the PoseData files
 fileStem = poseDataFiles(z).name(1:end-4);                                          % Get the AnimalName-Treatment prefix
 experiementDataPath = strcat(experimentDataDir, '\', fileStem, '.h5');              % Get H5 File Folder
 videoPath = strcat(videoDir, '\', fileStem,'.mp4');                                 % Get Video Folders
-
+immobilePath = strcat(immobileDir, '\', fileStem, '.arch');                         % Get Folder with ARCH Files from Solomon Coder
 
 opts = detectImportOptions(poseDataPath);
 opts = setvartype(opts,1,'double');
@@ -84,6 +85,14 @@ try
     video = VideoReader(videoPath);                                                 %% Try to import the video, if it doesn't work or doesn't exist, skip to the next PoseData file!
 catch
     fprintf(2,strcat('Cannot open video file: ', fileStem,'.mp4! Trying next file!'));
+    continue;
+end
+
+%Import Immobile Data
+try 
+    immobileFrames = readlines(immobilePath);
+catch   
+    fprintf(2,strcat('Cannot open immobile file: ', fileStem,'.arch! Trying next file!'));
     continue;
 end
 
@@ -415,9 +424,84 @@ for i = 1:length(individualOdors)
     totalStats.(col3) = sum(OdorStats.(col2)) - sum(OdorStats.(col1))  ;       % Per Odor Aversion Index
 end
 
+%% ======= Immobile Time ====== %
+
+immobileTime = table;
+
+immobileFrames = str2double(immobileFrames);
+immobileFrames(immobileFrames ~= 1) = 0;
+immobileFrames(((length(noseCoords)+1):end)) = [];
+
+immobileTime.StartFrame(1) = find(immobileFrames(:,1), 1, 'first');            %% Find the start of the first immobile instance
+
+immobileCounter = 1;                                                        %% Initialize to immobile instance one
+firstFound = true;                                                          %% Start frame has been found
+  
+for i = (immobileTime.StartFrame(1)+1):length(immobileFrames)               %% Start one frame after trial 1 start and iterate to end
+    if(firstFound)                                                          %% Search for the first instance of 1 -- the mouse is immobile
+        if(immobileFrames(i) == 0)                                          %% This will be the end of the respective trial
+            immobileTime.EndFrame(immobileCounter) = i;                     %% Set end frame to current index
+            immobileCounter = immobileCounter + 1;                          %% Advance immobile counter
+            firstFound = false;                                             %% Reset firstFound so we can search for the first index of the next instance of immobility
+        end
+    else
+        if(immobileFrames(i) == 1)                                          %% If we have not found the first frame of the trial, look for it
+            firstFound = true;
+            immobileTime.StartFrame(immobileCounter) = i;                   %% Set first frame of this new trial to current index once found
+        end
+    end
+    
+    if(i == length(immobileFrames))                                         %% Edge case for if the last frame is during a trial it will set the end frame to the last index
+        if(firstFound)                                                      %% Typically not the case, but incase of a crash or video failure 
+            immobileTime.EndFrame(immobileCounter) = i;
+        end
+    end
+end
 
 
+immobileTime.immobileDuration = immobileTime.EndFrame - immobileTime.StartFrame;
 
+for odor = 1:length(individualOdors)
+    immobileTime.(char(individualOdors(odor))) = zeros(length(immobileTime.StartFrame),1);
+end
+for odor = 1:length(individualOdors)
+    immobileTime.(strcat(char(individualOdors(odor)), '_ROI')) = zeros(length(immobileTime.StartFrame),1);
+end
+
+immobileCounter = 1;
+immobileStartFrame = immobileTime.StartFrame(1);
+immobileEndFrame = immobileTime.EndFrame(1);
+
+for j = 1:length(trialStats.StartFrame)
+    trialStartFrame = trialStats.StartFrame(j);
+    trialEndFrame = trialStats.EndFrame(j);
+    
+    if(trialStartFrame < immobileStartFrame)
+        continue;
+    end
+    
+    if(trialStartFrame >= immobileStartFrame)
+        trialOdor = char(trialStats.odor(j));
+        immobileTime.(trialOdor)(immobileCounter) = 1;
+            if(trialStats.TrialType(j) == 0)
+                if(ROIStats.TimeBodyLROI > 0)
+                    immobileTime.(strcat(+, '_ROI'))(immobileCounter) = 1;
+                end
+            elseif(trialStats.TrialType(j) == 1)
+                if(ROIStats.TimeBodyRROI  > 0)
+                    immobileTime.(strcat(trialodor, '_ROI'))(immobileCounter) = 1;
+                end
+            end
+
+        if(immobileEndFrame <= trialEndFrame)
+            immobileCounter = immobileCounter+1;
+            immobileStartFrame = immobileTime.StartFrame(immobileCounter);
+            immobileEndFrame = immobileTime.EndFrame(immobileCounter);
+        elseif(immobileEndFrame > trialEndFrame)
+            continue;
+        end
+    end
+end
 
 
 %% ======= EXPORT DATA ======= %
